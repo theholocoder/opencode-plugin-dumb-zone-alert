@@ -26,6 +26,22 @@ export const DumbZoneAlert = async ({ client, $, directory }) => {
   const { basename } = await import("path");
   const project = basename(directory ?? "unknown");
 
+  let hasNotifySend = false;
+  try {
+    // Check if notify-send is available
+    await $`which notify-send`.text();
+
+    // Check if D-Bus socket exists
+    const uid = process.getuid?.() ?? 1000;
+    const sockPath = `/run/user/${uid}/bus`;
+    await $`test -S ${sockPath}`;
+
+    // Notify-send is available and D-Bus socket exists
+    hasNotifySend = true;
+  } catch {
+    /** silent */
+  }
+
   // Map<sessionID, { prevInput, prevCacheRead, contextTotal, alerted: Set<ratio> }>
   const sessionState = new Map();
 
@@ -56,10 +72,12 @@ export const DumbZoneAlert = async ({ client, $, directory }) => {
       const msg = MESSAGES[tier.ratio];
 
       // Primary: notify-send
-      try {
-        await $`notify-send -u ${tier.urgency} ${title} ${msg}`;
-      } catch {
-        /* silent */
+      if (hasNotifySend) {
+        try {
+          await $`notify-send -u ${tier.urgency} ${title} ${msg}`;
+        } catch {
+          /* silent */
+        }
       }
 
       // Bonus: TUI toast (may fail)
